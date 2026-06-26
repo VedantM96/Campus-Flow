@@ -1,0 +1,6 @@
+{
+  "name": "CampusFlow",
+  "description": "AI-Powered Campus Recruitment Platform connecting students with recruiters through intelligent matching, resume analysis, and pipeline tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
