@@ -1077,9 +1077,9 @@ async function bootstrap() {
     });
   }
 
-  // Bind to host 0.0.0.0 and port 3000
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  // Bind to host localhost and port 3000
+  app.listen(PORT, "localhost", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
