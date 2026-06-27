@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { authService } from '../services/authService';
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Mail, 
@@ -24,12 +25,6 @@ interface AuthPageProps {
   initialRole: "student" | "recruiter" | "admin";
   showToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
-
-const DEFAULT_USERS = [
-  { email: "student@inst.edu", password: "password123", name: "Vedant Sharma", role: "student", college: "NIT Raipur", cgpa: "8.91" },
-  { email: "recruiter@inst.edu", password: "password123", name: "Ravi Shankar", role: "recruiter", company: "Google" },
-  { email: "admin@inst.edu", password: "password123", name: "System Admin", role: "admin" }
-];
 
 export default function AuthPage({ 
   onClose, 
@@ -57,15 +52,7 @@ export default function AuthPage({
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Initialize users in localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem("campusflow_users");
-    if (!stored) {
-      localStorage.setItem("campusflow_users", JSON.stringify(DEFAULT_USERS));
-    }
-  }, []);
-
-  // Autofill handles for demo convenience
+  // Autofill handles for demo convenience (populates the UI form)
   const handleAutofill = (roleToFill: "student" | "recruiter" | "admin") => {
     setSelectedRole(roleToFill);
     if (roleToFill === "student") {
@@ -78,22 +65,10 @@ export default function AuthPage({
       setEmail("admin@inst.edu");
       setPassword("password123");
     }
-    showToast(`Autofilled demo credentials for ${roleToFill}`, "info");
+    showToast(`Autofilled demo credentials for ${roleToFill}. Remember to register this user first!`, "info");
   };
 
-  const getStoredUsers = () => {
-    const stored = localStorage.getItem("campusflow_users");
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        return DEFAULT_USERS;
-      }
-    }
-    return DEFAULT_USERS;
-  };
-
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       showToast("Please enter an email address.", "warning");
@@ -108,66 +83,34 @@ export default function AuthPage({
       return;
     }
 
+    // Map frontend UI roles to your Spring Boot database enums
+    let backendRole = "STUDENT";
+    if (selectedRole === "recruiter") backendRole = "ORG_ADMIN";
+    if (selectedRole === "admin") backendRole = "SUPER_ADMIN";
+
     setIsLoading(true);
 
-    setTimeout(() => {
-      const users = getStoredUsers();
-
+    try {
       if (mode === "login") {
-        // Log In Flow
-        const found = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+        // 1. REAL BACKEND LOGIN CALL
+        await authService.login(email, password);
         
-        if (!found) {
-          showToast("Account not found. Please register first.", "error");
-          setIsLoading(false);
-          return;
-        }
-
-        if (found.password !== password) {
-          showToast("Incorrect password. Try again.", "error");
-          setIsLoading(false);
-          return;
-        }
-
-        if (found.role !== selectedRole) {
-          showToast(`This account is registered as a ${found.role}. Switch roles or log in with correct role.`, "warning");
-          setIsLoading(false);
-          return;
-        }
-
         setIsSuccess(true);
         setTimeout(() => {
           setIsLoading(false);
-          onSuccess(found.role, found.email, found.name);
+          // Trigger the dashboard transition!
+          onSuccess(selectedRole, email, name || "User");
         }, 1200);
 
       } else {
-        // Registration Flow
-        const alreadyExists = users.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
-        if (alreadyExists) {
-          showToast("An account with this email already exists.", "error");
-          setIsLoading(false);
-          return;
-        }
-
-        // Validate admin code
+        // 2. REAL BACKEND REGISTRATION CALL
         if (selectedRole === "admin" && adminCode !== "admin123") {
           showToast("Invalid Admin Security Code. (Hint: use admin123)", "error");
           setIsLoading(false);
           return;
         }
 
-        const newUser: any = {
-          email,
-          password,
-          name,
-          role: selectedRole,
-          ...(selectedRole === "student" && { college, cgpa }),
-          ...(selectedRole === "recruiter" && { company: company || "Self" })
-        };
-
-        const updatedUsers = [...users, newUser];
-        localStorage.setItem("campusflow_users", JSON.stringify(updatedUsers));
+        await authService.register(name, email, password, backendRole);
 
         showToast("Registration successful! Logging you in...", "success");
         setIsSuccess(true);
@@ -176,7 +119,13 @@ export default function AuthPage({
           onSuccess(selectedRole, email, name);
         }, 1200);
       }
-    }, 1000);
+    } catch (error: any) {
+      // 3. REAL ERROR HANDLING FROM SPRING BOOT
+      console.error("Backend Auth Error:", error);
+      const errorMsg = error.response?.data?.message || "Authentication failed. Check your credentials or try again.";
+      showToast(errorMsg, "error");
+      setIsLoading(false);
+    }
   };
 
   return (
